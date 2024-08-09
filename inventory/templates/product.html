@@ -1,0 +1,82 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Product Scanner</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+    <h1>Product Scanner</h1>
+    <div id="qr-reader" style="width: 600px"></div>
+    <div>
+        <input type="text" id="barcodeInput" placeholder="Scan barcode here" autofocus>
+        <button id="addToBasketBtn">Add to Basket</button>
+        <button id="sellBtn">Sell</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+        let lastScannedSku = null;
+
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log(`Code matched = ${decodedText}`, decodedResult);
+            processScannedCode(decodedText);
+        }
+
+        function onScanFailure(error) {
+            console.warn(`Code scan error = ${error}`);
+        }
+
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "qr-reader",
+            { fps: 10, qrbox: {width: 250, height: 250} },
+            /* verbose= */ false);
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+
+        function processScannedCode(code) {
+            lastScannedSku = code;
+            document.getElementById('result').innerText = `Scanned SKU: ${code}`;
+        }
+
+        function sendAction(action) {
+            if (!lastScannedSku) {
+                alert('Please scan a product first');
+                return;
+            }
+
+            fetch('{% url "scan_product" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                },
+                body: JSON.stringify({
+                    sku: lastScannedSku,
+                    action: action,
+                    quantity: 1
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+                alert(data.message);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        }
+
+        document.getElementById('addToBasketBtn').addEventListener('click', () => sendAction('add_to_basket'));
+        document.getElementById('sellBtn').addEventListener('click', () => sendAction('sell'));
+
+        // Handle barcode scanner input
+        document.getElementById('barcodeInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                processScannedCode(this.value);
+                this.value = ''; // Clear the input field
+                e.preventDefault(); // Prevent form submission
+            }
+        });
+    </script>
+</body>
+</html>
